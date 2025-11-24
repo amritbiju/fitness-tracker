@@ -5,6 +5,7 @@ import { CheckCircle2, Circle, ChevronDown } from 'lucide-react';
 import { db } from '@/lib/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { format } from 'date-fns';
+import { useUser } from '@/components/auth/UserContext';
 
 // Define the schedule with time groups
 const SCHEDULE = {
@@ -23,14 +24,19 @@ const SCHEDULE = {
 };
 
 export function SupplementsChecklist() {
+    const { user } = useUser();
     const [isExpanded, setIsExpanded] = useState(false);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const today = format(new Date(), 'yyyy-MM-dd');
 
     // Fetch today's logs from DB
-    const logs = useLiveQuery(() =>
-        db.supplements.where('date').equals(today).toArray()
-    ) || [];
+    const logs = useLiveQuery(async () => {
+        if (!user) return [];
+        return await db.supplements
+            .where('date').equals(today)
+            .filter(l => l.userId === user.id)
+            .toArray();
+    }, [user, today]) || [];
 
     // Create a Set of taken items for easy lookup
     const takenItems = new Set(logs.filter(l => l.isTaken).map(l => l.itemName));
@@ -41,6 +47,7 @@ export function SupplementsChecklist() {
     const completedCount = takenItems.size;
 
     const toggleCheck = async (item: string, timeGroup: string) => {
+        if (!user) return;
         const isTaken = takenItems.has(item);
 
         if (isTaken) {
@@ -56,7 +63,8 @@ export function SupplementsChecklist() {
                 itemName: item,
                 isTaken: true,
                 timeGroup,
-                synced: false
+                synced: false,
+                userId: user.id
             });
         }
     };

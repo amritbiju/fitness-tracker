@@ -7,6 +7,7 @@ import { NutritionBar } from '@/components/dashboard/NutritionBar';
 import { HistoryList } from '@/components/dashboard/HistoryList';
 import { ActivityRings } from '@/components/dashboard/ActivityRings';
 import { WeightLogger } from '@/components/dashboard/WeightLogger';
+import { Settings } from 'lucide-react';
 import Link from 'next/link';
 
 export default function Home() {
@@ -15,11 +16,14 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[var(--color-bg-primary)] p-6 pb-24 max-w-md mx-auto">
       {/* Header */}
-      <header className="mb-8 mt-2">
+      <header className="mb-8 mt-2 flex justify-between items-center">
         <h1 className="text-2xl tracking-tight">
           <span className="font-bold text-[var(--color-text-primary)]">{format(today, 'EEEE')}</span>
           <span className="font-normal text-[var(--color-text-secondary)]">, {format(today, 'MMMM d')}</span>
         </h1>
+        <Link href="/settings" className="p-2 -mr-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors">
+          <Settings className="w-6 h-6" />
+        </Link>
       </header>
 
       <div className="space-y-6">

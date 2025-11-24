@@ -7,25 +7,39 @@ import { db, WorkoutLog } from '@/lib/db';
 import { ConsistencyHeatmap } from '@/components/dashboard/ConsistencyHeatmap';
 import { SymmetryRadar } from '@/components/dashboard/SymmetryRadar';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { useUser } from '@/components/auth/UserContext';
 
 type MuscleGroup = 'All' | 'Push' | 'Pull' | 'Legs' | 'Core' | 'Run';
 
 export default function DashboardPage() {
+    const { user } = useUser();
     const [logs, setLogs] = useState<(WorkoutLog & { exerciseName?: string; muscleGroup?: string })[]>([]);
     const [filter, setFilter] = useState<MuscleGroup>('All');
     const [monthStats, setMonthStats] = useState({ workouts: 0, sets: 0, volume: 0 });
 
     useEffect(() => {
+        if (!user) return;
+
         const loadData = async () => {
-            // Get all logs
-            const allLogs = await db.logs.orderBy('timestamp').reverse().limit(100).toArray();
+            // Get all logs for current user
+            const allLogs = await db.logs
+                .where('userId').equals(user.id)
+                .reverse()
+                .sortBy('timestamp');
+
+            // Limit manually since we can't chain limit() easily after sortBy() in some Dexie versions without offset
+            // But let's try standard approach. 
+            // Actually, compound index [userId+timestamp] would be better for performance, 
+            // but for now let's just filter.
+
+            const recentLogs = allLogs.slice(0, 100);
 
             // Enrich with exercise data
-            const exerciseIds = new Set(allLogs.map(l => l.exerciseId));
+            const exerciseIds = new Set(recentLogs.map(l => l.exerciseId));
             const exercises = await db.exercises.where('id').anyOf([...exerciseIds]).toArray();
             const exerciseMap = new Map(exercises.map(e => [e.id!, { name: e.name, muscleGroup: e.muscleGroup }]));
 
-            const enriched = allLogs.map(log => ({
+            const enriched = recentLogs.map(log => ({
                 ...log,
                 exerciseName: exerciseMap.get(log.exerciseId)?.name || 'Unknown',
                 muscleGroup: exerciseMap.get(log.exerciseId)?.muscleGroup || 'Unknown'
@@ -37,11 +51,19 @@ export default function DashboardPage() {
             const now = new Date();
             const monthStart = startOfMonth(now).getTime();
             const monthEnd = endOfMonth(now).getTime();
-            const monthLogs = enriched.filter(l => l.timestamp >= monthStart && l.timestamp <= monthEnd);
+            // We need ALL logs for the month, not just recent 100.
+            // Let's fetch month logs separately or just fetch more.
+            // For scalability, fetching ALL logs is bad.
+            // Let's fetch logs within the timestamp range for the user.
 
-            const uniqueWorkouts = new Set(monthLogs.map(l => l.workoutId)).size;
-            const totalSets = monthLogs.length;
-            const totalVolume = monthLogs.reduce((sum, l) => sum + (l.weight * l.reps), 0);
+            const monthLogsRaw = await db.logs
+                .where('userId').equals(user.id)
+                .filter(l => l.timestamp >= monthStart && l.timestamp <= monthEnd)
+                .toArray();
+
+            const uniqueWorkouts = new Set(monthLogsRaw.map(l => l.workoutId)).size;
+            const totalSets = monthLogsRaw.length;
+            const totalVolume = monthLogsRaw.reduce((sum, l) => sum + (l.weight * l.reps), 0);
 
             setMonthStats({
                 workouts: uniqueWorkouts,
@@ -51,7 +73,7 @@ export default function DashboardPage() {
         };
 
         loadData();
-    }, []);
+    }, [user]);
 
     // Filter logs
     const filteredLogs = filter === 'All'
@@ -134,8 +156,8 @@ export default function DashboardPage() {
                             key={f}
                             onClick={() => setFilter(f)}
                             className={`px-4 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all ${filter === f
-                                    ? 'bg-[var(--color-text-primary)] text-[var(--color-bg-primary)]'
-                                    : 'bg-[var(--color-bg-secondary)] text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)]'
+                                ? 'bg-[var(--color-text-primary)] text-[var(--color-bg-primary)]'
+                                : 'bg-[var(--color-bg-secondary)] text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)]'
                                 }`}
                         >
                             {f}

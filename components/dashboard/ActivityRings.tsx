@@ -6,6 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
+import { useUser } from '@/components/auth/UserContext';
 
 function Ring({ radius, stroke, progress, color }: { radius: number, stroke: number, progress: number, color: string }) {
     const normalizedRadius = radius - stroke * 2;
@@ -47,13 +48,25 @@ function Ring({ radius, stroke, progress, color }: { radius: number, stroke: num
 }
 
 export function ActivityRings() {
+    const { user } = useUser();
     const today = format(new Date(), 'yyyy-MM-dd');
 
-    // Targets (User Settings)
-    const TARGET_CALS = 1800;
-    const TARGET_PROTEIN = 100;
+    // Fetch User Settings (Goals)
+    const settings = useLiveQuery(async () => {
+        if (!user) return null;
+        return await db.settings.where('userId').equals(user.id).first();
+    }, [user]);
 
-    const logs = useLiveQuery(() => db.nutrition.where('date').equals(today).toArray()) || [];
+    const TARGET_CALS = settings?.calorieTarget || 1800;
+    const TARGET_PROTEIN = settings?.proteinTarget || 100;
+
+    const logs = useLiveQuery(async () => {
+        if (!user) return [];
+        return await db.nutrition
+            .where('date').equals(today)
+            .filter(l => l.userId === user.id)
+            .toArray();
+    }, [user, today]) || [];
 
     const totals = logs.reduce((acc, log) => ({
         calories: acc.calories + log.calories,

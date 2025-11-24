@@ -5,26 +5,32 @@ import { format } from 'date-fns';
 import { db, WorkoutLog, Exercise } from '@/lib/db';
 import { EditLogModal } from '@/components/dashboard/EditLogModal';
 import { Pencil, ChevronDown } from 'lucide-react';
+import { useUser } from '@/components/auth/UserContext';
 
 export function HistoryList() {
+    const { user } = useUser();
     const [logs, setLogs] = useState<(WorkoutLog & { exerciseName?: string })[]>([]);
     const [editingLog, setEditingLog] = useState<WorkoutLog | null>(null);
     const [showAll, setShowAll] = useState(false);
 
     const loadHistory = async () => {
-        // Fetch last 20 logs
+        if (!user) return;
+
+        // Fetch last 20 logs for current user
         const recentLogs = await db.logs
-            .orderBy('timestamp')
+            .where('userId').equals(user.id)
             .reverse()
-            .limit(20)
-            .toArray();
+            .sortBy('timestamp');
+
+        // Limit manually
+        const limitedLogs = recentLogs.slice(0, 20);
 
         // Fetch exercise names
-        const exerciseIds = new Set(recentLogs.map(l => l.exerciseId));
+        const exerciseIds = new Set(limitedLogs.map(l => l.exerciseId));
         const exercises = await db.exercises.where('id').anyOf([...exerciseIds]).toArray();
         const exerciseMap = new Map(exercises.map(e => [e.id!, e.name]));
 
-        const enrichedLogs = recentLogs.map(log => ({
+        const enrichedLogs = limitedLogs.map(log => ({
             ...log,
             exerciseName: exerciseMap.get(log.exerciseId) || 'Unknown Exercise'
         }));
@@ -34,7 +40,7 @@ export function HistoryList() {
 
     useEffect(() => {
         loadHistory();
-    }, []);
+    }, [user]);
 
     if (logs.length === 0) {
         return (

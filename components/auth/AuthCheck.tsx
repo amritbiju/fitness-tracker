@@ -1,30 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Loader2 } from 'lucide-react';
+import { UserProvider, useUser } from './UserContext';
 
-export function AuthCheck({ children }: { children: React.ReactNode }) {
+function AuthContent({ children }: { children: React.ReactNode }) {
+    const { user, loading: userLoading } = useUser();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [view, setView] = useState<'sign_in' | 'sign_up'>('sign_in');
-    const [session, setSession] = useState<any>(null);
-    const [initialized, setInitialized] = useState(false);
-
-    // Check session on mount
-    useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setInitialized(true);
-        });
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setSession(session);
-        });
-
-        return () => subscription.unsubscribe();
-    }, []);
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -45,7 +31,7 @@ export function AuthCheck({ children }: { children: React.ReactNode }) {
         }
     };
 
-    if (!initialized) {
+    if (userLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg-primary)]">
                 <Loader2 className="w-8 h-8 animate-spin text-[var(--color-accent)]" />
@@ -53,7 +39,7 @@ export function AuthCheck({ children }: { children: React.ReactNode }) {
         );
     }
 
-    if (!session) {
+    if (!user) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg-primary)] p-6">
                 <div className="w-full max-w-sm space-y-8">
@@ -111,4 +97,12 @@ export function AuthCheck({ children }: { children: React.ReactNode }) {
     }
 
     return <>{children}</>;
+}
+
+export function AuthCheck({ children }: { children: React.ReactNode }) {
+    return (
+        <UserProvider>
+            <AuthContent>{children}</AuthContent>
+        </UserProvider>
+    );
 }

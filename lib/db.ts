@@ -5,6 +5,7 @@ export interface Exercise {
     name: string;
     muscleGroup: string; // 'Push', 'Pull', 'Legs', 'Core', 'Run'
     isCustom: boolean;
+    userId?: string; // Optional for default exercises, required for custom
 }
 
 export interface WorkoutLog {
@@ -14,9 +15,12 @@ export interface WorkoutLog {
     setNumber: number;
     weight: number;
     reps: number;
+    distance?: number; // For runs (km)
+    duration?: number; // For runs (min)
     notes?: string;
     timestamp: number;
     synced?: boolean;
+    userId: string;
 }
 
 export interface NutritionLog {
@@ -27,6 +31,7 @@ export interface NutritionLog {
     protein: number;
     quantity: string;
     synced?: boolean;
+    userId: string;
 }
 
 export interface SupplementLog {
@@ -36,6 +41,7 @@ export interface SupplementLog {
     isTaken: boolean;
     timeGroup: string; // 'empty_stomach', 'breakfast', etc.
     synced?: boolean;
+    userId: string;
 }
 
 export interface StapleFood {
@@ -44,12 +50,22 @@ export interface StapleFood {
     calories: number; // per 100g/1 unit
     protein: number; // per 100g/1 unit
     unit: 'g' | 'oz' | 'unit' | 'scoop';
+    userId?: string; // Optional for global staples
 }
 
 export interface BodyMetric {
     id?: number;
     date: string; // YYYY-MM-DD
     weight: number;
+    synced?: boolean;
+    userId: string;
+}
+
+export interface UserSettings {
+    id?: number;
+    userId: string;
+    calorieTarget: number;
+    proteinTarget: number;
     synced?: boolean;
 }
 
@@ -60,16 +76,18 @@ class FitnessDatabase extends Dexie {
     supplements!: Table<SupplementLog>;
     staples!: Table<StapleFood>;
     body_metrics!: Table<BodyMetric>;
+    settings!: Table<UserSettings>;
 
     constructor() {
         super('fitness-tracker-db');
-        this.version(4).stores({
-            exercises: '++id, name, muscleGroup',
-            logs: '++id, workoutId, exerciseId, timestamp, [synced+timestamp]',
-            nutrition: '++id, date, [synced+date]',
-            supplements: '++id, date, [date+timeGroup], [synced+date]',
-            staples: '++id, name',
-            body_metrics: '++id, date, [synced+date]'
+        this.version(6).stores({
+            exercises: '++id, name, muscleGroup, userId',
+            logs: '++id, workoutId, exerciseId, timestamp, userId, [synced+timestamp]',
+            nutrition: '++id, date, userId, [synced+date]',
+            supplements: '++id, date, userId, [date+timeGroup], [synced+date]',
+            staples: '++id, name, userId',
+            body_metrics: '++id, date, userId, [synced+date]',
+            settings: '++id, userId, [synced+userId]'
         });
     }
 }

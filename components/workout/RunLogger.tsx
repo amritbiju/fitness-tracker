@@ -1,16 +1,50 @@
 'use client';
 
 import { useState } from 'react';
-import { Save } from 'lucide-react';
+import { Save, Check } from 'lucide-react';
+import { db } from '@/lib/db';
+import { useUser } from '@/components/auth/UserContext';
 
 export function RunLogger({ workoutId }: { workoutId: string }) {
+    const { user } = useUser();
     const [distance, setDistance] = useState('');
     const [duration, setDuration] = useState('');
     const [pace, setPace] = useState('');
+    const [saved, setSaved] = useState(false);
 
-    const handleSave = () => {
-        console.log('Saving run:', { distance, duration, pace, workoutId });
-        // TODO: Save to DB
+    const handleSave = async () => {
+        if (!distance || !duration || !user) return;
+
+        // Create a special exercise for "Run" if it doesn't exist? 
+        // Or assume workoutId implies a "Run" workout which has a "Run" exercise.
+        // For now, let's find or create a "Run" exercise.
+        let runExercise = await db.exercises.where('name').equals('Run').first();
+        if (!runExercise) {
+            const id = await db.exercises.add({ name: 'Run', muscleGroup: 'Legs', isCustom: false });
+            runExercise = { id: id as number, name: 'Run', muscleGroup: 'Legs', isCustom: false };
+        }
+
+        await db.logs.add({
+            workoutId,
+            exerciseId: runExercise.id!,
+            setNumber: 1, // Runs are usually 1 "set"
+            weight: 0, // No weight
+            reps: 0, // No reps
+            distance: parseFloat(distance),
+            duration: parseFloat(duration),
+            notes: `Pace: ${pace}`,
+            timestamp: Date.now(),
+            userId: user.id,
+            synced: false
+        });
+
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+
+        // Clear form
+        setDistance('');
+        setDuration('');
+        setPace('');
     };
 
     return (

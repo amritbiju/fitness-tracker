@@ -32,11 +32,11 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]`}
       >
         <DbInitializer />
-        {/* <AuthCheck> */}
-        <SyncWrapper>
-          {children}
-        </SyncWrapper>
-        {/* </AuthCheck> */}
+        <AuthCheck>
+          <SyncWrapper>
+            {children}
+          </SyncWrapper>
+        </AuthCheck>
       </body>
     </html>
   );

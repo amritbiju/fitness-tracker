@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Check, History } from 'lucide-react';
 import { db, Exercise, WorkoutLog } from '@/lib/db';
 import Link from 'next/link';
+import { useUser } from '@/components/auth/UserContext';
 
 interface ExerciseCardProps {
     exercise: Exercise;
@@ -11,6 +12,7 @@ interface ExerciseCardProps {
 }
 
 export function ExerciseCard({ exercise, workoutId }: ExerciseCardProps) {
+    const { user } = useUser();
     const [sets, setSets] = useState<WorkoutLog[]>([]);
     const [weight, setWeight] = useState('');
     const [reps, setReps] = useState('');
@@ -18,10 +20,13 @@ export function ExerciseCard({ exercise, workoutId }: ExerciseCardProps) {
 
     // Load previous stats
     useEffect(() => {
+        if (!user) return;
+
         const loadHistory = async () => {
             const history = await db.logs
                 .where('exerciseId')
                 .equals(exercise.id!)
+                .filter(l => l.userId === user.id)
                 .reverse()
                 .sortBy('timestamp');
 
@@ -32,10 +37,10 @@ export function ExerciseCard({ exercise, workoutId }: ExerciseCardProps) {
             }
         };
         loadHistory();
-    }, [exercise.id]);
+    }, [exercise.id, user]);
 
     const addSet = async () => {
-        if (!weight || !reps) return;
+        if (!weight || !reps || !user) return;
 
         const newSet: WorkoutLog = {
             workoutId,
@@ -44,6 +49,7 @@ export function ExerciseCard({ exercise, workoutId }: ExerciseCardProps) {
             weight: parseFloat(weight),
             reps: parseFloat(reps),
             timestamp: Date.now(),
+            userId: user.id
         };
 
         const id = await db.logs.add(newSet);

@@ -3,18 +3,24 @@
 import { useState, useEffect } from 'react';
 import { subDays, isSameDay } from 'date-fns';
 import { db } from '@/lib/db';
+import { useUser } from '@/components/auth/UserContext';
 
 export function ConsistencyHeatmap() {
+    const { user } = useUser();
     const [activityDates, setActivityDates] = useState<number[]>([]);
 
     useEffect(() => {
+        if (!user) return;
+
         const loadActivity = async () => {
-            const logs = await db.logs.toArray();
+            const logs = await db.logs
+                .where('userId').equals(user.id)
+                .toArray();
             const dates = logs.map(l => l.timestamp);
             setActivityDates(dates);
         };
         loadActivity();
-    }, []);
+    }, [user]);
 
     // Generate last 28 days (4 weeks)
     const days = Array.from({ length: 28 }, (_, i) => {

@@ -3,26 +3,42 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/db';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useUser } from '@/components/auth/UserContext';
 
 export function useSync() {
     const [isSyncing, setIsSyncing] = useState(false);
-    const [user, setUser] = useState<any>(null);
+    const { user } = useUser();
 
+    // Migration Logic: Claim anonymous data
     useEffect(() => {
-        // Check auth status
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setUser(session?.user ?? null);
-        });
+        if (!user) return;
 
-        const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-            setUser(session?.user ?? null);
-        });
+        const migrateData = async () => {
+            try {
+                // Find all logs without a userId
+                // Note: Dexie might not index 'undefined' well for userId if we just added it, 
+                // so we might need to iterate or check for records where userId is missing.
+                // Since we just added the field, ALL existing records have undefined userId.
 
-        return () => {
-            authListener.subscription.unsubscribe();
+                // We'll do this table by table
+                await db.transaction('rw', db.logs, db.nutrition, db.supplements, db.body_metrics, async () => {
+                    // Logs
+                    await db.logs.filter(l => !l.userId).modify({ userId: user.id });
+                    // Nutrition
+                    await db.nutrition.filter(n => !n.userId).modify({ userId: user.id });
+                    // Supplements
+                    await db.supplements.filter(s => !s.userId).modify({ userId: user.id });
+                    // Body Metrics
+                    await db.body_metrics.filter(b => !b.userId).modify({ userId: user.id });
+                });
+
+            } catch (err) {
+                console.error('Migration failed:', err);
+            }
         };
-    }, []);
+
+        migrateData();
+    }, [user]);
 
     // Sync Logic
     useEffect(() => {
@@ -31,11 +47,11 @@ export function useSync() {
         const sync = async () => {
             setIsSyncing(true);
             try {
-                // 1. PUSH: Find unsynced local logs
-                const unsyncedLogs = await db.logs.where('synced').equals(0).toArray(); // Dexie treats boolean false as 0 in indices sometimes, but let's check
-                // Actually, undefined or false. 
-                // Let's just filter manually for safety or use filter()
-                const pendingLogs = await db.logs.filter(l => !l.synced).toArray();
+                // 1. PUSH: Find unsynced local logs for THIS user
+                const pendingLogs = await db.logs
+                    .where('userId').equals(user.id)
+                    .filter(l => !l.synced)
+                    .toArray();
 
                 if (pendingLogs.length > 0) {
                     const { error } = await supabase.from('workout_logs').insert(
@@ -61,11 +77,12 @@ export function useSync() {
                     }
                 }
 
-                // 2. PULL: Get recent logs from Supabase (Simplified for now)
+                // 2. PULL: Get recent logs from Supabase
                 // In a real app, we'd track 'last_pulled_at'
                 const { data: remoteLogs, error: pullError } = await supabase
                     .from('workout_logs')
                     .select('*')
+                    .eq('user_id', user.id) // IMPORTANT: Filter by user
                     .order('timestamp', { ascending: false })
                     .limit(50);
 

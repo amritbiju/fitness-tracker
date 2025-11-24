@@ -5,13 +5,21 @@ import { Scale, Check, ArrowRight } from 'lucide-react';
 import { db } from '@/lib/db';
 import { format } from 'date-fns';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useUser } from '@/components/auth/UserContext';
 
 export function WeightLogger() {
+    const { user } = useUser();
     const today = format(new Date(), 'yyyy-MM-dd');
     const [weight, setWeight] = useState('');
     const [saved, setSaved] = useState(false);
 
-    const existingEntry = useLiveQuery(() => db.body_metrics.where('date').equals(today).first());
+    const existingEntry = useLiveQuery(async () => {
+        if (!user) return null;
+        return await db.body_metrics
+            .where('date').equals(today)
+            .filter(b => b.userId === user.id)
+            .first();
+    }, [user, today]);
 
     useEffect(() => {
         if (existingEntry) {
@@ -21,13 +29,18 @@ export function WeightLogger() {
     }, [existingEntry]);
 
     const handleSave = async () => {
-        if (!weight) return;
+        if (!weight || !user) return;
 
         const val = parseFloat(weight);
         if (existingEntry) {
             await db.body_metrics.update(existingEntry.id!, { weight: val, synced: false });
         } else {
-            await db.body_metrics.add({ date: today, weight: val, synced: false });
+            await db.body_metrics.add({
+                date: today,
+                weight: val,
+                synced: false,
+                userId: user.id
+            });
         }
         setSaved(true);
 

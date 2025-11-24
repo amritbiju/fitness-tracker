@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { db, StapleFood } from '@/lib/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { format } from 'date-fns';
+import { useUser } from '@/components/auth/UserContext';
 
 // Helper to parse "200g chicken" or "2 scoops whey"
 function parseInput(text: string) {
@@ -25,10 +26,17 @@ function parseInput(text: string) {
 }
 
 export function useSmartNutrition() {
+    const { user } = useUser();
     const [input, setInput] = useState('');
     const [suggestions, setSuggestions] = useState<StapleFood[]>([]);
 
-    const staples = useLiveQuery(() => db.staples.toArray()) || [];
+    const staples = useLiveQuery(async () => {
+        if (!user) return [];
+        // Fetch user staples + global staples (no userId)
+        return await db.staples
+            .filter(s => s.userId === user.id || !s.userId)
+            .toArray();
+    }, [user]) || [];
 
     useEffect(() => {
         if (!input) {
@@ -42,11 +50,18 @@ export function useSmartNutrition() {
     }, [input, staples]);
 
     const createStaple = async (name: string, calories: number, protein: number, unit: 'g' | 'unit' | 'scoop') => {
-        await db.staples.add({ name: name.toLowerCase(), calories, protein, unit });
+        if (!user) return;
+        await db.staples.add({
+            name: name.toLowerCase(),
+            calories,
+            protein,
+            unit,
+            userId: user.id
+        });
     };
 
     const addLog = async () => {
-        if (!input) return null;
+        if (!input || !user) return null;
 
         const parsed = parseInput(input);
         const today = format(new Date(), 'yyyy-MM-dd');
@@ -80,7 +95,8 @@ export function useSmartNutrition() {
             quantity: `${parsed.qty}${parsed.unit}`,
             calories,
             protein,
-            synced: false
+            synced: false,
+            userId: user.id
         });
 
         setInput('');
